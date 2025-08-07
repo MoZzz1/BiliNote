@@ -14,6 +14,8 @@ export const generateNote = async (data: {
   video_understand?: boolean
   video_interval?: number
   grid_size: Array<number>
+  batch_download?: boolean
+  max_p_number?: number
 }) => {
   try {
     console.log('generateNote', data)
@@ -25,18 +27,18 @@ export const generateNote = async (data: {
       }
       return null
     }
-    toast.success('笔记生成任务已提交！')
+    
+    if (data.batch_download && data.platform === 'bilibili') {
+      toast.success(`批量下载任务已提交！将下载从P1到P${data.max_p_number}的视频`)
+    } else {
+      toast.success('笔记生成任务已提交！')
+    }
 
     console.log('res', response)
-    // 成功提示
 
     return response
   } catch (e: any) {
     console.error('❌ 请求出错', e)
-
-    // 错误提示
-    // toast.error('笔记生成失败，请稍后重试')
-
     throw e // 抛出错误以便调用方处理
   }
 }

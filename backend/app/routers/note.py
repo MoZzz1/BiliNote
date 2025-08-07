@@ -49,6 +49,9 @@ class VideoRequest(BaseModel):
     video_understanding: Optional[bool] = False
     video_interval: Optional[int] = 0
     grid_size: Optional[list] = []
+    # 添加批量下载参数
+    batch_download: Optional[bool] = False
+    max_p_number: Optional[int] = 1
 
     @field_validator("video_url")
     def validate_supported_url(cls, v):
@@ -131,16 +134,38 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
-
+        # 处理批量下载请求
+        if data.batch_download and data.platform == "bilibili":
+            # 提取基础视频ID（不含p参数）
+            base_video_id = extract_video_id(data.video_url, data.platform)
+            base_url = None
+            
+            # 如果返回的是元组，说明原始URL中包含p参数
+            if isinstance(base_video_id, tuple) and len(base_video_id) == 2:
+                base_video_id = base_video_id[0]  # 只取BV号部分
+            
+            # 创建批量任务
+            task_ids = []
+            for p in range(1, data.max_p_number + 1):
+                # 为每个分P创建一个新的任务ID
+                task_id = str(uuid.uuid4())
+                # 构建带有p参数的URL
+                p_url = f"https://www.bilibili.com/video/{base_video_id}?p={p}"
+                
+                # 添加后台任务
+                background_tasks.add_task(
+                    run_note_task, task_id, p_url, data.platform, data.quality, 
+                    data.link, data.screenshot, data.model_name, data.provider_id, 
+                    data.format, data.style, data.extras, data.video_understanding, 
+                    data.video_interval, data.grid_size
+                )
+                task_ids.append(task_id)
+            
+            return R.success({"task_ids": task_ids, "batch": True})
+        
+        # 非批量下载的原有逻辑
         video_id = extract_video_id(data.video_url, data.platform)
-        # if not video_id:
-        #     raise HTTPException(status_code=400, detail="无法提取视频 ID")
-        # existing = get_task_by_video(video_id, data.platform)
-        # if existing:
-        #     return R.error(
-        #         msg='笔记已生成，请勿重复发起',
-        #
-        #     )
+        
         if data.task_id:
             # 如果传了task_id，说明是重试！
             task_id = data.task_id
@@ -151,9 +176,12 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
             # 正常新建任务
             task_id = str(uuid.uuid4())
 
-        background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
-                                  data.screenshot, data.model_name, data.provider_id, data.format, data.style,
-                                  data.extras, data.video_understanding, data.video_interval, data.grid_size)
+        background_tasks.add_task(
+            run_note_task, task_id, data.video_url, data.platform, data.quality, 
+            data.link, data.screenshot, data.model_name, data.provider_id, 
+            data.format, data.style, data.extras, data.video_understanding, 
+            data.video_interval, data.grid_size
+        )
         return R.success({"task_id": task_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

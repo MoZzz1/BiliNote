@@ -58,6 +58,9 @@ const formSchema = z
       .tuple([z.coerce.number().min(1).max(10), z.coerce.number().min(1).max(10)])
       .default([3, 3])
       .optional(),
+    // 添加批量下载选项
+    batch_download: z.boolean().optional(),
+    max_p_number: z.coerce.number().min(1).max(300).default(1).optional(),
   })
   .superRefine(({ video_url, platform }, ctx) => {
     if (platform === 'local') {
@@ -229,8 +232,24 @@ const NoteForm = () => {
     }
 
     // message.success('已提交任务')
-    const  data  = await generateNote(payload)
-    addPendingTask(data.task_id, values.platform, payload)
+    const data = await generateNote(payload)
+    
+    // 处理批量下载任务的响应
+    if (data.batch && data.task_ids && Array.isArray(data.task_ids)) {
+      // 对于批量任务，添加所有任务ID到任务列表
+      data.task_ids.forEach((taskId, index) => {
+        // 只将第一个任务设为当前任务
+        if (index === 0) {
+          addPendingTask(taskId, values.platform, payload)
+        } else {
+          // 其他任务只添加到列表，不设为当前任务
+          addPendingTask(taskId, values.platform, payload, false)
+        }
+      })
+    } else {
+      // 处理单个任务的情况
+      addPendingTask(data.task_id, values.platform, payload)
+    }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
     console.warn('表单校验失败：', errors)
@@ -277,7 +296,6 @@ const NoteForm = () => {
           <SectionHeader title="视频链接" tip="支持 B 站、YouTube 等平台" />
           <div className="flex gap-2">
             {/* 平台选择 */}
-
             <FormField
               control={form.control}
               name="platform"
@@ -327,6 +345,49 @@ const NoteForm = () => {
               )}
             />
           </div>
+
+          {/* 批量下载选项 - 仅对B站视频显示 */}
+          {platform === 'bilibili' && (
+            <div className="flex items-center gap-4">
+              <FormField
+                control={form.control}
+                name="batch_download"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-medium">
+                      批量下载合集
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+              {form.watch('batch_download') && (
+                <FormField
+                  control={form.control}
+                  name="max_p_number"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                      <FormLabel className="text-sm font-medium">下载至P</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          className="w-20"
+                          min={1}
+                          max={300}
+                          {...field}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+          )}
 
           <FormField
             control={form.control}

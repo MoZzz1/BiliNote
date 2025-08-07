@@ -1,3 +1,11 @@
+// 添加对批量任务的支持
+// 这里需要根据实际的hooks文件结构进行修改
+// 主要是处理返回的task_ids数组，并为每个任务创建轮询
+
+// 示例修改思路：
+// 1. 在任务存储中添加批量任务的概念
+// 2. 当收到批量任务响应时，将所有task_id存储并开始轮询
+// 3. 在UI中显示批量任务的整体进度
 import { useEffect, useRef } from 'react'
 import { useTaskStore } from '@/store/taskStore'
 import { get_task_status } from '@/services/note.ts'

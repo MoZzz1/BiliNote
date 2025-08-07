@@ -73,7 +73,7 @@ export const useTaskStore = create<TaskStore>()(
       tasks: [],
       currentTaskId: null,
 
-      addPendingTask: (taskId: string, platform: string, formData: any) =>
+      addPendingTask: (taskId: string, platform: string, formData: any, setAsCurrent: boolean = true) =>
 
         set(state => ({
           tasks: [
@@ -102,7 +102,8 @@ export const useTaskStore = create<TaskStore>()(
             },
             ...state.tasks,
           ],
-          currentTaskId: taskId, // 默认设置为当前任务
+          // 只有当setAsCurrent为true时才设置为当前任务
+          currentTaskId: setAsCurrent ? taskId : state.currentTaskId,
         })),
 
       updateTaskContent: (id, data) =>
