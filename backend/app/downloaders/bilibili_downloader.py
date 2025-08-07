@@ -45,11 +45,14 @@ class BilibiliDownloader(Downloader, ABC):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
-            video_id = info.get("id")
+            downloaded_video_id = info.get("id")
             title = info.get("title")
             duration = info.get("duration", 0)
             cover_url = info.get("thumbnail")
-            audio_path = os.path.join(output_dir, f"{video_id}.mp3")
+            audio_path = os.path.join(output_dir, f"{downloaded_video_id}.mp3")
+            
+        # 提取视频ID，可能包含分P信息
+        video_id_result = extract_video_id(video_url, "bilibili")
 
         return AudioDownloadResult(
             file_path=audio_path,
@@ -57,7 +60,7 @@ class BilibiliDownloader(Downloader, ABC):
             duration=duration,
             cover_url=cover_url,
             platform="bilibili",
-            video_id=video_id,
+            video_id=video_id_result,  # 直接传递可能是元组的结果
             raw_info=info,
             video_path=None  # ❗音频下载不包含视频路径
         )
@@ -74,15 +77,25 @@ class BilibiliDownloader(Downloader, ABC):
         if output_dir is None:
             output_dir = get_data_dir()
         os.makedirs(output_dir, exist_ok=True)
-        print("video_url",video_url)
-        video_id=extract_video_id(video_url, "bilibili")
-        video_path = os.path.join(output_dir, f"{video_id}.mp4")
+        print("video_url", video_url)
+        
+        # 提取视频ID和可能的分P信息
+        video_id_result = extract_video_id(video_url, "bilibili")
+        
+        # 处理可能返回的元组(video_id, p_number)
+        if isinstance(video_id_result, tuple) and len(video_id_result) == 2:
+            video_id, p_number = video_id_result
+            # 使用纯净的BV号作为文件名，但保留分P信息用于后续处理
+            file_video_id = video_id
+        else:
+            video_id = video_id_result
+            file_video_id = video_id
+            
+        video_path = os.path.join(output_dir, f"{file_video_id}.mp4")
         if os.path.exists(video_path):
             return video_path
 
         # 检查是否已经存在
-
-
         output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
 
         ydl_opts = {
@@ -95,12 +108,9 @@ class BilibiliDownloader(Downloader, ABC):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
-            video_id = info.get("id")
-            video_path = os.path.join(output_dir, f"{video_id}.mp4")
-
-        if not os.path.exists(video_path):
-            raise FileNotFoundError(f"视频文件未找到: {video_path}")
-
+            downloaded_video_id = info.get("id")
+            video_path = os.path.join(output_dir, f"{downloaded_video_id}.mp4")
+            
         return video_path
 
     def delete_video(self, video_path: str) -> str:
