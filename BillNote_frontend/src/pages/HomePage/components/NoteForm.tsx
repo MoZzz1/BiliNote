@@ -223,12 +223,20 @@ const NoteForm = () => {
   }
 
   const onSubmit = async (values: NoteFormValues) => {
-    console.log('Not even go here')
+    console.log('Form values:', values)
+    console.log('Form values.start_p_number:', values.start_p_number)
+    console.log('Form values.start_p_number type:', typeof values.start_p_number)
+    
     const payload: NoteFormValues = {
       ...values,
       provider_id: modelList.find(m => m.model_name === values.model_name)!.provider_id,
       task_id: currentTaskId || '',
+      // 确保start_p_number是数字类型
+      start_p_number: values.start_p_number ? Number(values.start_p_number) : 1
     }
+    console.log('Payload to be sent:', payload)
+    console.log('Payload.start_p_number:', payload.start_p_number)
+    console.log('Payload.start_p_number type:', typeof payload.start_p_number)
     if (currentTaskId) {
       retryTask(currentTaskId, payload)
       return
@@ -240,6 +248,7 @@ const NoteForm = () => {
     // 处理批量下载任务的响应
     if (data.batch === true) {
       // 添加第一个任务，并保存批量下载信息
+      console.log('批量下载任务响应数据:', data);
       addPendingTask(
         data.task_id, 
         values.platform, 
@@ -248,7 +257,8 @@ const NoteForm = () => {
         { 
           isBatchTask: true,
           pendingUrls: data.pending_urls || [],
-          batchInfo: data.batch_info || {}
+          batchInfo: data.batch_info || {},
+          startPNumber: data.start_p_number || payload.start_p_number || 1
         }
       )
     } else {
@@ -386,6 +396,11 @@ const NoteForm = () => {
                             min={1}
                             max={300}
                             {...field}
+                            // 确保值是数字类型
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              field.onChange(isNaN(value) ? 1 : value);
+                            }}
                           />
                         </FormControl>
                       </FormItem>
@@ -404,6 +419,11 @@ const NoteForm = () => {
                             min={1}
                             max={300}
                             {...field}
+                            // 确保值是数字类型
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              field.onChange(isNaN(value) ? 1 : value);
+                            }}
                           />
                         </FormControl>
                       </FormItem>

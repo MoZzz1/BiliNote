@@ -19,7 +19,8 @@ export const generateNote = async (data: {
   start_p_number?: number
 }) => {
   try {
-    console.log('generateNote', data)
+    console.log('generateNote full data:', data)
+    console.log('start_p_number:', data.start_p_number)
     const response = await request.post('/generate_note', data)
 
     if (!response) {
@@ -30,8 +31,11 @@ export const generateNote = async (data: {
     }
     
     if (data.batch_download && data.platform === 'bilibili') {
-      const startP = data.start_p_number || 1;
-      toast.success(`批量下载任务已提交！将下载从P${startP}到P${data.max_p_number}的视频`)
+      // 确保start_p_number和max_p_number是数字类型
+      const startP = typeof data.start_p_number === 'number' ? data.start_p_number : (data.start_p_number ? Number(data.start_p_number) : 1);
+      const endP = typeof data.max_p_number === 'number' ? data.max_p_number : (data.max_p_number ? Number(data.max_p_number) : 1);
+      console.log('批量下载任务提示 - startP:', startP, 'endP:', endP);
+      toast.success(`批量下载任务已提交！将下载从P${startP}到P${endP}的视频`)
     } else {
       toast.success('笔记生成任务已提交！')
     }

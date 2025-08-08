@@ -136,6 +136,9 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
+        # 记录请求参数
+        logger.info(f"收到生成笔记请求: platform={data.platform}, batch_download={data.batch_download}, start_p_number={data.start_p_number}, max_p_number={data.max_p_number}")
+        
         # 处理批量下载请求
         if data.batch_download and data.platform == "bilibili":
             # 提取基础视频ID（不含p参数）
@@ -148,11 +151,16 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
             # 创建批量任务队列
             pending_urls = []
             # 使用自定义的开始分p和结束分p
-            start_p = data.start_p_number if data.start_p_number else 1
-            end_p = data.max_p_number
+            # 确保start_p_number是整数类型
+            start_p = int(data.start_p_number) if data.start_p_number else 1
+            end_p = int(data.max_p_number) if data.max_p_number else 1
+            
+            # 添加日志记录
+            logger.info(f"批量下载参数 - 开始P: {start_p}, 结束P: {end_p}, 原始start_p_number: {data.start_p_number}, 类型: {type(data.start_p_number)}")
             
             # 确保开始分p不大于结束分p
             if start_p > end_p:
+                logger.info(f"开始P({start_p})大于结束P({end_p})，重置开始P为1")
                 start_p = 1
                 
             for p in range(start_p, end_p + 1):
@@ -172,11 +180,17 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
                 data.video_interval, data.grid_size
             )
             
+            # 记录批量下载任务信息
+            logger.info(f"创建批量下载任务: task_id={task_id}, start_p={start_p}, end_p={end_p}, 总任务数={len(pending_urls)}")
+            logger.info(f"第一个任务URL: {first_url}")
+            logger.info(f"剩余任务URLs: {pending_urls[1:]}")
+            
             # 返回第一个任务ID和剩余的URL队列
-            return R.success({
+            response_data = {
                 "task_id": task_id, 
                 "batch": True, 
                 "pending_urls": pending_urls[1:],  # 剩余待处理的URL
+                "start_p_number": start_p,  # 添加开始P数到响应中
                 "batch_info": {
                     "platform": data.platform,
                     "quality": data.quality,
@@ -191,7 +205,12 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
                     "video_interval": data.video_interval,
                     "grid_size": data.grid_size
                 }
-            })
+            }
+            
+            # 记录最终响应数据
+            logger.info(f"批量下载响应数据: {response_data}")
+            
+            return R.success(response_data)
         
         # 非批量下载的原有逻辑
         video_id = extract_video_id(data.video_url, data.platform)
