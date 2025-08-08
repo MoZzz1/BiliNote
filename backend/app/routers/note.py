@@ -52,6 +52,8 @@ class VideoRequest(BaseModel):
     # 添加批量下载参数
     batch_download: Optional[bool] = False
     max_p_number: Optional[int] = 1
+    # 添加自定义开始和结束分p参数
+    start_p_number: Optional[int] = 1
 
     @field_validator("video_url")
     def validate_supported_url(cls, v):
@@ -138,30 +140,58 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         if data.batch_download and data.platform == "bilibili":
             # 提取基础视频ID（不含p参数）
             base_video_id = extract_video_id(data.video_url, data.platform)
-            base_url = None
             
             # 如果返回的是元组，说明原始URL中包含p参数
             if isinstance(base_video_id, tuple) and len(base_video_id) == 2:
                 base_video_id = base_video_id[0]  # 只取BV号部分
             
-            # 创建批量任务
-            task_ids = []
-            for p in range(1, data.max_p_number + 1):
-                # 为每个分P创建一个新的任务ID
-                task_id = str(uuid.uuid4())
+            # 创建批量任务队列
+            pending_urls = []
+            # 使用自定义的开始分p和结束分p
+            start_p = data.start_p_number if data.start_p_number else 1
+            end_p = data.max_p_number
+            
+            # 确保开始分p不大于结束分p
+            if start_p > end_p:
+                start_p = 1
+                
+            for p in range(start_p, end_p + 1):
                 # 构建带有p参数的URL
                 p_url = f"https://www.bilibili.com/video/{base_video_id}?p={p}"
-                
-                # 添加后台任务
-                background_tasks.add_task(
-                    run_note_task, task_id, p_url, data.platform, data.quality, 
-                    data.link, data.screenshot, data.model_name, data.provider_id, 
-                    data.format, data.style, data.extras, data.video_understanding, 
-                    data.video_interval, data.grid_size
-                )
-                task_ids.append(task_id)
+                pending_urls.append(p_url)
             
-            return R.success({"task_ids": task_ids, "batch": True})
+            # 只创建第一个任务
+            task_id = str(uuid.uuid4())
+            first_url = pending_urls[0]
+            
+            # 添加第一个任务到后台任务
+            background_tasks.add_task(
+                run_note_task, task_id, first_url, data.platform, data.quality, 
+                data.link, data.screenshot, data.model_name, data.provider_id, 
+                data.format, data.style, data.extras, data.video_understanding, 
+                data.video_interval, data.grid_size
+            )
+            
+            # 返回第一个任务ID和剩余的URL队列
+            return R.success({
+                "task_id": task_id, 
+                "batch": True, 
+                "pending_urls": pending_urls[1:],  # 剩余待处理的URL
+                "batch_info": {
+                    "platform": data.platform,
+                    "quality": data.quality,
+                    "link": data.link,
+                    "screenshot": data.screenshot,
+                    "model_name": data.model_name,
+                    "provider_id": data.provider_id,
+                    "format": data.format,
+                    "style": data.style,
+                    "extras": data.extras,
+                    "video_understanding": data.video_understanding,
+                    "video_interval": data.video_interval,
+                    "grid_size": data.grid_size
+                }
+            })
         
         # 非批量下载的原有逻辑
         video_id = extract_video_id(data.video_url, data.platform)

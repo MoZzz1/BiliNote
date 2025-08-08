@@ -61,6 +61,7 @@ const formSchema = z
     // 添加批量下载选项
     batch_download: z.boolean().optional(),
     max_p_number: z.coerce.number().min(1).max(300).default(1).optional(),
+    start_p_number: z.coerce.number().min(1).max(300).default(1).optional(),
   })
   .superRefine(({ video_url, platform }, ctx) => {
     if (platform === 'local') {
@@ -150,6 +151,7 @@ const NoteForm = () => {
       video_interval: 4,
       grid_size: [3, 3],
       format: [],
+      start_p_number: 1,
     },
   })
   const currentTask = getCurrentTask()
@@ -187,6 +189,7 @@ const NoteForm = () => {
       video_interval: formData.video_interval ?? 4,
       grid_size: formData.grid_size ?? [3, 3],
       format: formData.format ?? [],
+      start_p_number: formData.start_p_number ?? 1,
     })
   }, [
     // 当下面任意一个变了，就重新 reset
@@ -235,17 +238,19 @@ const NoteForm = () => {
     const data = await generateNote(payload)
     
     // 处理批量下载任务的响应
-    if (data.batch && data.task_ids && Array.isArray(data.task_ids)) {
-      // 对于批量任务，添加所有任务ID到任务列表
-      data.task_ids.forEach((taskId, index) => {
-        // 只将第一个任务设为当前任务
-        if (index === 0) {
-          addPendingTask(taskId, values.platform, payload)
-        } else {
-          // 其他任务只添加到列表，不设为当前任务
-          addPendingTask(taskId, values.platform, payload, false)
+    if (data.batch === true) {
+      // 添加第一个任务，并保存批量下载信息
+      addPendingTask(
+        data.task_id, 
+        values.platform, 
+        payload, 
+        true, // 设为当前任务
+        { 
+          isBatchTask: true,
+          pendingUrls: data.pending_urls || [],
+          batchInfo: data.batch_info || {}
         }
-      })
+      )
     } else {
       // 处理单个任务的情况
       addPendingTask(data.task_id, values.platform, payload)
@@ -367,24 +372,44 @@ const NoteForm = () => {
                 )}
               />
               {form.watch('batch_download') && (
-                <FormField
-                  control={form.control}
-                  name="max_p_number"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                      <FormLabel className="text-sm font-medium">下载至P</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          className="w-20"
-                          min={1}
-                          max={300}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                <div className="flex items-center gap-4">
+                  <FormField
+                    control={form.control}
+                    name="start_p_number"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                        <FormLabel className="text-sm font-medium">开始P</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            className="w-20"
+                            min={1}
+                            max={300}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="max_p_number"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                        <FormLabel className="text-sm font-medium">结束P</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            className="w-20"
+                            min={1}
+                            max={300}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
             </div>
           )}

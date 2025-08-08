@@ -16,6 +16,7 @@ export const generateNote = async (data: {
   grid_size: Array<number>
   batch_download?: boolean
   max_p_number?: number
+  start_p_number?: number
 }) => {
   try {
     console.log('generateNote', data)
@@ -29,7 +30,8 @@ export const generateNote = async (data: {
     }
     
     if (data.batch_download && data.platform === 'bilibili') {
-      toast.success(`批量下载任务已提交！将下载从P1到P${data.max_p_number}的视频`)
+      const startP = data.start_p_number || 1;
+      toast.success(`批量下载任务已提交！将下载从P${startP}到P${data.max_p_number}的视频`)
     } else {
       toast.success('笔记生成任务已提交！')
     }

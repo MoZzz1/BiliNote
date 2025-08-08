@@ -16,6 +16,7 @@ export const useTaskPolling = (interval = 3000) => {
   const updateTaskContent = useTaskStore(state => state.updateTaskContent)
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus)
   const removeTask = useTaskStore(state => state.removeTask)
+  const createNextBatchTask = useTaskStore(state => state.createNextBatchTask)
 
   const tasksRef = useRef(tasks)
 
@@ -46,22 +47,39 @@ export const useTaskPolling = (interval = 3000) => {
                 transcript,
                 audioMeta: audio_meta,
               })
+              
+              // 检查是否是批量任务，如果是则创建下一个任务
+              if (task.batchInfo && task.batchInfo.isBatchTask) {
+                console.log('批量任务完成，准备创建下一个任务')
+                // 显示批量进度
+                const current = (task.batchInfo.currentIndex || 0) + 1
+                const total = task.batchInfo.totalCount || 1
+                toast.success(`批量任务进度: ${current}/${total}`)
+                
+                // 创建下一个批量任务
+                await createNextBatchTask(task.id)
+              }
             } else if (status === 'FAILED') {
               updateTaskContent(task.id, { status })
               console.warn(`⚠️ 任务 ${task.id} 失败`)
+              
+              // 如果批量任务失败，也尝试创建下一个任务
+              if (task.batchInfo && task.batchInfo.isBatchTask) {
+                console.log('批量任务失败，准备创建下一个任务')
+                toast.error(`批量任务失败，继续下一个`)
+                await createNextBatchTask(task.id)
+              }
             } else {
-              updateTaskContent(task.id, { status })
+              // 更新其他状态
+              updateTaskStatus(task.id, status)
             }
           }
-        } catch (e) {
-          console.error('❌ 任务轮询失败：', e)
-          // toast.error(`生成失败 ${e.message || e}`)
-          updateTaskContent(task.id, { status: 'FAILED' })
-          // removeTask(task.id)
+        } catch (error) {
+          console.error(`轮询任务 ${task.id} 出错:`, error)
         }
       }
     }, interval)
 
     return () => clearInterval(timer)
-  }, [interval])
+  }, [interval, updateTaskContent, updateTaskStatus, removeTask, createNextBatchTask])
 }

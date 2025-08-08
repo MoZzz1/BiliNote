@@ -53,18 +53,28 @@ export interface Task {
     model_name: string
     provider_id: string
   }
+  // 新增批量任务相关字段
+  batchInfo?: {
+    isBatchTask: boolean
+    pendingUrls: string[]
+    currentIndex?: number
+    totalCount?: number
+    batchInfo?: any
+  }
 }
 
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (taskId: string, platform: string, formData: any, setAsCurrent?: boolean, batchInfo?: any) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
-  retryTask: (id: string) => void
+  retryTask: (id: string, payload?: any) => void
+  // 新增方法：创建下一个批量任务
+  createNextBatchTask: (currentTaskId: string) => Promise<void>
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -73,7 +83,7 @@ export const useTaskStore = create<TaskStore>()(
       tasks: [],
       currentTaskId: null,
 
-      addPendingTask: (taskId: string, platform: string, formData: any, setAsCurrent: boolean = true) =>
+      addPendingTask: (taskId: string, platform: string, formData: any, setAsCurrent: boolean = true, batchInfo: any = null) =>
 
         set(state => ({
           tasks: [
@@ -99,6 +109,14 @@ export const useTaskStore = create<TaskStore>()(
                 title: '',
                 video_id: '',
               },
+              // 如果有批量信息，添加到任务中
+              ...(batchInfo ? { batchInfo: {
+                isBatchTask: true,
+                pendingUrls: batchInfo.pendingUrls || [],
+                currentIndex: 0,
+                totalCount: (batchInfo.pendingUrls?.length || 0) + 1, // +1 是因为当前任务也算一个
+                batchInfo: batchInfo.batchInfo
+              }} : {})
             },
             ...state.tasks,
           ],
@@ -106,6 +124,76 @@ export const useTaskStore = create<TaskStore>()(
           currentTaskId: setAsCurrent ? taskId : state.currentTaskId,
         })),
 
+      // 新增方法：创建下一个批量任务
+      createNextBatchTask: async (currentTaskId: string) => {
+        const currentTask = get().tasks.find(task => task.id === currentTaskId);
+        if (!currentTask || !currentTask.batchInfo || !currentTask.batchInfo.isBatchTask) {
+          return;
+        }
+        
+        // 检查是否还有待处理的URL
+        const pendingUrls = currentTask.batchInfo.pendingUrls;
+        if (!pendingUrls || pendingUrls.length === 0) {
+          console.log('批量任务全部完成');
+          return;
+        }
+        
+        // 取出下一个URL
+        const nextUrl = pendingUrls[0];
+        const remainingUrls = pendingUrls.slice(1);
+        
+        // 创建新任务
+        const newTaskId = uuidv4();
+        const batchInfo = currentTask.batchInfo.batchInfo;
+        
+        // 调用API创建新任务
+        await generateNote({
+          video_url: nextUrl,
+          platform: batchInfo.platform,
+          quality: batchInfo.quality,
+          model_name: batchInfo.model_name,
+          provider_id: batchInfo.provider_id,
+          link: batchInfo.link,
+          screenshot: batchInfo.screenshot,
+          format: batchInfo.format,
+          style: batchInfo.style,
+          extras: batchInfo.extras,
+          video_understanding: batchInfo.video_understanding,
+          video_interval: batchInfo.video_interval,
+          grid_size: batchInfo.grid_size,
+          task_id: newTaskId
+        });
+        
+        // 添加新任务到任务列表
+        get().addPendingTask(
+          newTaskId,
+          batchInfo.platform,
+          {
+            video_url: nextUrl,
+            platform: batchInfo.platform,
+            quality: batchInfo.quality,
+            model_name: batchInfo.model_name,
+            provider_id: batchInfo.provider_id,
+            link: batchInfo.link,
+            screenshot: batchInfo.screenshot,
+            format: batchInfo.format,
+            style: batchInfo.style,
+            extras: batchInfo.extras,
+            video_understanding: batchInfo.video_understanding,
+            video_interval: batchInfo.video_interval,
+            grid_size: batchInfo.grid_size,
+          },
+          true, // 设为当前任务
+          {
+            isBatchTask: true,
+            pendingUrls: remainingUrls,
+            currentIndex: currentTask.batchInfo.currentIndex + 1,
+            totalCount: currentTask.batchInfo.totalCount,
+            batchInfo: batchInfo
+          }
+        );
+      },
+      
       updateTaskContent: (id, data) =>
           set(state => ({
             tasks: state.tasks.map(task => {
